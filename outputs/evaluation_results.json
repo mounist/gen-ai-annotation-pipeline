@@ -1,0 +1,31 @@
+{
+  "accuracy": {
+    "annotator_1": 0.918,
+    "annotator_2": 0.839,
+    "annotator_3": 0.784,
+    "annotator_4": 0.802,
+    "annotator_5": 0.722,
+    "consensus": 0.97,
+    "llm_annotator": 0.905
+  },
+  "f1_scores": {
+    "consensus": {
+      "World": 0.963265306122449,
+      "Sports": 0.9781312127236581,
+      "Business": 0.9662027833001988,
+      "Sci/Tech": 0.9722222222222222
+    },
+    "llm_annotator": {
+      "World": 0.906187624750499,
+      "Sports": 0.976,
+      "Business": 0.8587786259541985,
+      "Sci/Tech": 0.88
+    }
+  },
+  "disagreements": 120,
+  "complementarity_score": 0.9,
+  "llm_corrects_consensus": 27,
+  "consensus_corrects_llm": 92,
+  "both_correct": 878,
+  "both_wrong": 3
+}

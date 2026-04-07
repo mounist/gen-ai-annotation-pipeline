@@ -1,0 +1,7 @@
+annotator,accuracy
+annotator_1,0.918
+annotator_2,0.839
+annotator_3,0.784
+annotator_4,0.802
+annotator_5,0.722
+llm_annotator,0.905

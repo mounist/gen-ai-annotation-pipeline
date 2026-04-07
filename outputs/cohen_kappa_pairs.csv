@@ -1,0 +1,16 @@
+annotator_a,annotator_b,kappa
+annotator_1,annotator_2,0.7000099996666778
+annotator_1,annotator_3,0.6360043679475846
+annotator_1,annotator_4,0.6666302182371939
+annotator_1,annotator_5,0.5600029333137779
+annotator_1,llm_annotator,0.7773416459118859
+annotator_2,annotator_3,0.5667972051088606
+annotator_2,annotator_4,0.5640738168336829
+annotator_2,annotator_5,0.4929310586398543
+annotator_2,llm_annotator,0.69712212649621
+annotator_3,annotator_4,0.5242125184084443
+annotator_3,annotator_5,0.44987978607916146
+annotator_3,llm_annotator,0.6136202846685861
+annotator_4,annotator_5,0.45279561382318356
+annotator_4,llm_annotator,0.6464913263645434
+annotator_5,llm_annotator,0.5658208857521118

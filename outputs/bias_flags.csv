@@ -1,0 +1,3 @@
+annotator,true_category,predicted_category,error_rate,avg_error_rate,ratio,count
+annotator_5,World,Business,0.216,0.08959999999999999,2.410714285714286,54
+annotator_5,Sports,World,0.168,0.0744,2.2580645161290325,42
