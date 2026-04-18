@@ -32,7 +32,7 @@ def fig_to_base64(fig) -> str:
     return f"data:image/png;base64,{b64}"
 
 
-def plot_accuracy_comparison(df: pd.DataFrame, has_llm: bool) -> str:
+def plot_accuracy_comparison(df: pd.DataFrame, has_llm: bool, has_ft: bool = False) -> str:
     """Bar chart: accuracy comparison across all annotators + LLM + consensus."""
     cols = ANNOTATOR_COLS[:]
     if has_llm:
@@ -59,6 +59,12 @@ def plot_accuracy_comparison(df: pd.DataFrame, has_llm: bool) -> str:
         names.append("LLM")
         accs.append(llm_acc)
         colors.append("#70AD47")
+
+    if has_ft:
+        ft_acc = (df["finetuned_model"] == df["true_label"]).mean()
+        names.append("Fine-tuned")
+        accs.append(ft_acc)
+        colors.append("#7030A0")
 
     fig, ax = plt.subplots(figsize=(10, 5))
     bars = ax.bar(names, accs, color=colors, edgecolor="white", linewidth=0.8)
@@ -98,49 +104,54 @@ def plot_kappa_heatmap(df: pd.DataFrame, has_llm: bool) -> str:
     return fig_to_base64(fig)
 
 
-def plot_confusion_matrices(df: pd.DataFrame, has_llm: bool) -> str:
-    """Side-by-side confusion matrices for consensus and LLM."""
+def plot_confusion_matrices(df: pd.DataFrame, has_llm: bool, has_ft: bool = False) -> str:
+    """Side-by-side confusion matrices for consensus, LLM, and fine-tuned model."""
     consensus = compute_consensus(df)
 
-    n_plots = 2 if has_llm else 1
-    fig, axes = plt.subplots(1, n_plots, figsize=(7 * n_plots, 5))
+    panels = [("Human Consensus", consensus, "Blues")]
+    if has_llm:
+        panels.append(("LLM (Claude)", df["llm_annotator"], "Greens"))
+    if has_ft:
+        panels.append(("Fine-tuned DistilBERT", df["finetuned_model"], "Purples"))
+
+    n_plots = len(panels)
+    fig, axes = plt.subplots(1, n_plots, figsize=(6 * n_plots, 5))
     if n_plots == 1:
         axes = [axes]
 
-    cm_cons = confusion_matrix(df["true_label"], consensus, labels=CATEGORIES)
-    sns.heatmap(cm_cons, annot=True, fmt="d", xticklabels=CATEGORIES, yticklabels=CATEGORIES,
-                cmap="Blues", ax=axes[0], linewidths=0.5)
-    axes[0].set_title("Human Consensus", fontsize=13, fontweight="bold")
-    axes[0].set_xlabel("Predicted")
-    axes[0].set_ylabel("True")
-
-    if has_llm:
-        cm_llm = confusion_matrix(df["true_label"], df["llm_annotator"], labels=CATEGORIES)
-        sns.heatmap(cm_llm, annot=True, fmt="d", xticklabels=CATEGORIES, yticklabels=CATEGORIES,
-                    cmap="Greens", ax=axes[1], linewidths=0.5)
-        axes[1].set_title("LLM (Claude)", fontsize=13, fontweight="bold")
-        axes[1].set_xlabel("Predicted")
-        axes[1].set_ylabel("True")
+    for ax, (title, preds, cmap) in zip(axes, panels):
+        cm = confusion_matrix(df["true_label"], preds, labels=CATEGORIES)
+        sns.heatmap(cm, annot=True, fmt="d", xticklabels=CATEGORIES, yticklabels=CATEGORIES,
+                    cmap=cmap, ax=ax, linewidths=0.5)
+        ax.set_title(title, fontsize=13, fontweight="bold")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
 
     fig.suptitle("Confusion Matrices", fontsize=14, fontweight="bold", y=1.02)
     return fig_to_base64(fig)
 
 
-def plot_f1_comparison(df: pd.DataFrame, has_llm: bool) -> str:
+def plot_f1_comparison(df: pd.DataFrame, has_llm: bool, has_ft: bool = False) -> str:
     """Grouped bar chart of per-category F1 scores."""
     consensus = compute_consensus(df)
 
     cons_f1 = f1_score(df["true_label"], consensus, labels=CATEGORIES, average=None)
 
     x = np.arange(len(CATEGORIES))
-    width = 0.35
+    n_groups = 1 + int(has_llm) + int(has_ft)
+    width = 0.8 / n_groups
+    offsets = np.linspace(-(n_groups - 1) / 2, (n_groups - 1) / 2, n_groups) * width
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.bar(x - width / 2, cons_f1, width, label="Human Consensus", color="#5B9BD5", edgecolor="white")
-
+    ax.bar(x + offsets[0], cons_f1, width, label="Human Consensus", color="#5B9BD5", edgecolor="white")
+    idx = 1
     if has_llm:
         llm_f1 = f1_score(df["true_label"], df["llm_annotator"], labels=CATEGORIES, average=None)
-        ax.bar(x + width / 2, llm_f1, width, label="LLM (Claude)", color="#70AD47", edgecolor="white")
+        ax.bar(x + offsets[idx], llm_f1, width, label="LLM (Claude)", color="#70AD47", edgecolor="white")
+        idx += 1
+    if has_ft:
+        ft_f1 = f1_score(df["true_label"], df["finetuned_model"], labels=CATEGORIES, average=None)
+        ax.bar(x + offsets[idx], ft_f1, width, label="Fine-tuned DistilBERT", color="#7030A0", edgecolor="white")
 
     ax.set_ylabel("F1 Score", fontsize=12)
     ax.set_title("Per-Category F1 Score Comparison", fontsize=14, fontweight="bold")
@@ -239,6 +250,18 @@ def generate_html_report(charts: dict, eval_results: dict, bias_flags: list, ran
                 <div class="label">LLM Accuracy</div>
             </div>
             {% endif %}
+            {% if eval_results.accuracy.finetuned_model is defined %}
+            <div class="metric-card">
+                <div class="value">{{ "%.1f"|format(eval_results.accuracy.finetuned_model * 100) }}%</div>
+                <div class="label">Fine-tuned DistilBERT Accuracy</div>
+            </div>
+            {% endif %}
+            {% if eval_results.finetuned_meta is defined %}
+            <div class="metric-card">
+                <div class="value">{{ "%.2f"|format(eval_results.finetuned_meta.latency_ms_per_sample) }} ms</div>
+                <div class="label">Fine-tuned Latency / sample</div>
+            </div>
+            {% endif %}
             {% if eval_results.complementarity_score is defined %}
             <div class="metric-card">
                 <div class="value">{{ "%.1f"|format(eval_results.complementarity_score * 100) }}%</div>
@@ -275,16 +298,48 @@ def generate_html_report(charts: dict, eval_results: dict, bias_flags: list, ran
         <div class="chart"><img src="{{ charts.f1 }}" alt="F1 Comparison"></div>
     </div>
 
+    {% if eval_results.f1_scores.finetuned_model is defined %}
+    <div class="section">
+        <h2>5. Fine-tuned DistilBERT Details</h2>
+        <p style="margin-bottom:10px;">
+            Full fine-tune of <code>distilbert-base-uncased</code> on the AG News <b>train</b> split (120K items).
+            Evaluated on the same 1,000-item eval set used for human-consensus and Claude — no overlap with training.
+        </p>
+        <table>
+            <tr><th>Category</th><th>F1 (Consensus)</th><th>F1 (Claude)</th><th>F1 (Fine-tuned)</th></tr>
+            {% for cat in ["World", "Sports", "Business", "Sci/Tech"] %}
+            <tr>
+                <td>{{ cat }}</td>
+                <td>{{ "%.4f"|format(eval_results.f1_scores.consensus[cat]) }}</td>
+                <td>{% if eval_results.f1_scores.llm_annotator is defined %}{{ "%.4f"|format(eval_results.f1_scores.llm_annotator[cat]) }}{% else %}—{% endif %}</td>
+                <td>{{ "%.4f"|format(eval_results.f1_scores.finetuned_model[cat]) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% if eval_results.three_way is defined %}
+        <h3 style="margin-top:20px;font-size:16px;color:#1a1a2e;">3-way Agreement</h3>
+        <table>
+            <tr><th>Outcome</th><th>Count</th></tr>
+            <tr><td>All three correct</td><td>{{ eval_results.three_way.all_correct }}</td></tr>
+            <tr><td>All three wrong</td><td>{{ eval_results.three_way.all_wrong }}</td></tr>
+            <tr><td>Only fine-tuned correct</td><td>{{ eval_results.three_way.only_finetuned_correct }}</td></tr>
+            <tr><td>Only Claude correct</td><td>{{ eval_results.three_way.only_llm_correct }}</td></tr>
+            <tr><td>Only consensus correct</td><td>{{ eval_results.three_way.only_consensus_correct }}</td></tr>
+        </table>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% if charts.complementarity %}
     <div class="section">
-        <h2>5. LLM Complementarity</h2>
+        <h2>6. LLM Complementarity</h2>
         <p style="margin-bottom:10px;">Items where the LLM corrects human consensus errors, broken down by category.</p>
         <div class="chart"><img src="{{ charts.complementarity }}" alt="Complementarity"></div>
     </div>
     {% endif %}
 
     <div class="section">
-        <h2>6. Annotator Ranking</h2>
+        <h2>7. Annotator Ranking</h2>
         <table>
             <tr><th>Rank</th><th>Annotator</th><th>Accuracy</th><th>Avg Kappa</th><th>Consensus Agreement</th><th>Bias Flags</th><th>Composite Score</th></tr>
             {% for _, row in ranking.iterrows() %}
@@ -303,7 +358,7 @@ def generate_html_report(charts: dict, eval_results: dict, bias_flags: list, ran
 
     {% if bias_flags %}
     <div class="section">
-        <h2>7. Systematic Bias Detection</h2>
+        <h2>8. Systematic Bias Detection</h2>
         <table>
             <tr><th>Annotator</th><th>True Category</th><th>Mislabeled As</th><th>Error Rate</th><th>Avg Rate</th><th>Ratio</th><th>Count</th></tr>
             {% for flag in bias_flags %}
@@ -350,17 +405,18 @@ def main():
         return
 
     has_llm = "llm_annotator" in df.columns and df["llm_annotator"].notna().all()
-    print(f"Loaded {len(df)} items (LLM annotations: {'yes' if has_llm else 'no'})")
+    has_ft = "finetuned_model" in df.columns and df["finetuned_model"].notna().all()
+    print(f"Loaded {len(df)} items (LLM: {'yes' if has_llm else 'no'}, fine-tuned: {'yes' if has_ft else 'no'})")
 
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Generate charts
     print("Generating charts...")
     charts = {
-        "accuracy": plot_accuracy_comparison(df, has_llm),
+        "accuracy": plot_accuracy_comparison(df, has_llm, has_ft),
         "kappa": plot_kappa_heatmap(df, has_llm),
-        "confusion": plot_confusion_matrices(df, has_llm),
-        "f1": plot_f1_comparison(df, has_llm),
+        "confusion": plot_confusion_matrices(df, has_llm, has_ft),
+        "f1": plot_f1_comparison(df, has_llm, has_ft),
         "complementarity": plot_complementarity(df) if has_llm else None,
     }
 

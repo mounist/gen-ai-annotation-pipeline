@@ -6,7 +6,8 @@
     "annotator_4": 0.802,
     "annotator_5": 0.722,
     "consensus": 0.97,
-    "llm_annotator": 0.905
+    "llm_annotator": 0.905,
+    "finetuned_model": 0.937
   },
   "f1_scores": {
     "consensus": {
@@ -20,6 +21,12 @@
       "Sports": 0.976,
       "Business": 0.8587786259541985,
       "Sci/Tech": 0.88
+    },
+    "finetuned_model": {
+      "World": 0.9456740442655935,
+      "Sports": 0.9796747967479674,
+      "Business": 0.906930693069307,
+      "Sci/Tech": 0.9169960474308301
     }
   },
   "disagreements": 120,
@@ -27,5 +34,58 @@
   "llm_corrects_consensus": 27,
   "consensus_corrects_llm": 92,
   "both_correct": 878,
-  "both_wrong": 3
+  "both_wrong": 3,
+  "three_way": {
+    "all_correct": 851,
+    "all_wrong": 1,
+    "only_finetuned_correct": 2,
+    "only_llm_correct": 2,
+    "only_consensus_correct": 33
+  },
+  "finetuned_meta": {
+    "model": "distilbert-base-uncased",
+    "training_set": "ag_news train split (120,000 items)",
+    "eval_set": "data/ag_news_sample.csv (1,000 items \u2014 same as human/LLM eval)",
+    "accuracy": 0.937,
+    "f1_per_class": {
+      "World": 0.9456740442655935,
+      "Sports": 0.9796747967479674,
+      "Business": 0.906930693069307,
+      "Sci/Tech": 0.9169960474308301
+    },
+    "confusion_matrix": [
+      [
+        235,
+        1,
+        9,
+        5
+      ],
+      [
+        3,
+        241,
+        3,
+        3
+      ],
+      [
+        5,
+        0,
+        229,
+        16
+      ],
+      [
+        4,
+        0,
+        14,
+        232
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "World",
+      "Sports",
+      "Business",
+      "Sci/Tech"
+    ],
+    "latency_ms_per_sample": 5.851057199644856,
+    "device": "cuda"
+  }
 }

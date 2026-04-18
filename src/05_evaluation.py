@@ -25,8 +25,11 @@ def main():
     print(f"Loaded {len(df)} items")
 
     has_llm = "llm_annotator" in df.columns and df["llm_annotator"].notna().all()
+    has_ft = "finetuned_model" in df.columns and df["finetuned_model"].notna().all()
     if not has_llm:
         print("WARNING: LLM annotations missing. Running evaluation without LLM comparison.")
+    if not has_ft:
+        print("WARNING: Fine-tuned model predictions missing. Run src/07_finetune_classifier.py for 3-way comparison.")
 
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -52,6 +55,11 @@ def main():
         accuracy_results["llm_annotator"] = llm_acc
         print(f"  {'llm_annotator':20s}: {llm_acc:.4f}")
 
+    if has_ft:
+        ft_acc = (df["finetuned_model"] == df["true_label"]).mean()
+        accuracy_results["finetuned_model"] = ft_acc
+        print(f"  {'finetuned_model':20s}: {ft_acc:.4f}")
+
     # --- Per-category F1 ---
     print("\n" + "=" * 60)
     print("PER-CATEGORY F1 SCORES")
@@ -71,6 +79,14 @@ def main():
         for cat, f in zip(CATEGORIES, llm_f1):
             print(f"    {cat:10s}: {f:.4f}")
             f1_results["llm_annotator"][cat] = float(f)
+
+    if has_ft:
+        ft_f1 = f1_score(df["true_label"], df["finetuned_model"], labels=CATEGORIES, average=None)
+        print("\n  Fine-tuned DistilBERT:")
+        f1_results["finetuned_model"] = {}
+        for cat, f in zip(CATEGORIES, ft_f1):
+            print(f"    {cat:10s}: {f:.4f}")
+            f1_results["finetuned_model"][cat] = float(f)
 
     if has_llm:
         # --- Disagreement analysis ---
@@ -139,11 +155,47 @@ def main():
             "both_correct": len(both_right),
             "both_wrong": len(both_wrong),
         }
+
+        if has_ft:
+            # --- 3-way comparison: consensus vs Claude vs fine-tuned DistilBERT ---
+            print("\n" + "=" * 60)
+            print("3-WAY AGREEMENT: CONSENSUS vs CLAUDE vs FINE-TUNED")
+            print("=" * 60)
+            cons_ok = df["consensus"] == df["true_label"]
+            llm_ok = df["llm_annotator"] == df["true_label"]
+            ft_ok = df["finetuned_model"] == df["true_label"]
+            all_right = (cons_ok & llm_ok & ft_ok).sum()
+            all_wrong = ((~cons_ok) & (~llm_ok) & (~ft_ok)).sum()
+            only_ft = ((~cons_ok) & (~llm_ok) & ft_ok).sum()
+            only_llm = ((~cons_ok) & llm_ok & (~ft_ok)).sum()
+            only_cons = (cons_ok & (~llm_ok) & (~ft_ok)).sum()
+            print(f"  All three correct:       {all_right:4d} ({all_right/len(df)*100:.1f}%)")
+            print(f"  All three wrong:         {all_wrong:4d} ({all_wrong/len(df)*100:.1f}%)")
+            print(f"  Only fine-tuned correct: {only_ft:4d}")
+            print(f"  Only Claude correct:     {only_llm:4d}")
+            print(f"  Only consensus correct:  {only_cons:4d}")
+
+            print("\n" + "=" * 60)
+            print("CLASSIFICATION REPORT: FINE-TUNED DISTILBERT")
+            print("=" * 60)
+            print(classification_report(df["true_label"], df["finetuned_model"], labels=CATEGORIES))
+
+            eval_results["three_way"] = {
+                "all_correct": int(all_right),
+                "all_wrong": int(all_wrong),
+                "only_finetuned_correct": int(only_ft),
+                "only_llm_correct": int(only_llm),
+                "only_consensus_correct": int(only_cons),
+            }
     else:
         eval_results = {
             "accuracy": accuracy_results,
             "f1_scores": f1_results,
         }
+
+    ft_path = OUTPUTS_DIR / "finetuned_results.json"
+    if ft_path.exists():
+        eval_results["finetuned_meta"] = json.loads(ft_path.read_text())
 
     with open(OUTPUTS_DIR / "evaluation_results.json", "w") as f:
         json.dump(eval_results, f, indent=2)
